@@ -3,9 +3,8 @@ import { Character } from "../types/character";
 
 export default function useCharacter() {
 	const [characters, setCharacters] = useState<Character[]>([]);
-	const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(
-		null,
-	);
+	const [selectedCharacter, setSelectedCharacter] =
+		useState<Character | null>(null);
 
 	const loadCharacters = async () => {
 		try {
@@ -40,8 +39,6 @@ export default function useCharacter() {
 		}
 	};
 
-
-
 	useEffect(() => {
 		loadCharacters();
 	}, []);
@@ -54,14 +51,24 @@ export default function useCharacter() {
 	};
 
 	const createCharacter = async (
-		characterData: Omit<Character, "id">,
+		characterData: Omit<Character, "id"> | FormData,
 	) => {
 		try {
-			const res = await fetch("/api/v1/characters", {
+			const isFormData = characterData instanceof FormData;
+			const body = isFormData
+				? characterData
+				: JSON.stringify(characterData);
+
+			const init: RequestInit = {
 				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(characterData),
-			});
+				body,
+			};
+
+			if (!isFormData) {
+				init.headers = { "Content-Type": "application/json" };
+			}
+
+			const res = await fetch("/api/v1/characters", init);
 
 			if (!res.ok) {
 				const errorData = await res.json().catch(() => ({}));
@@ -73,19 +80,31 @@ export default function useCharacter() {
 
 			setCharacters((prev) => [...prev, newCharacter]);
 			setSelectedCharacter(newCharacter);
-
 		} catch (err) {
 			alert(err instanceof Error ? err.message : "An unknown error occurred");
 		}
 	};
 
-	const updateCharacter = async (characterData: Character) => {
+	const updateCharacter = async (characterData: Character | FormData) => {
 		try {
-			const res = await fetch(`/api/v1/characters/${characterData.id}`, {
+			const isFormData = characterData instanceof FormData;
+			const id = isFormData
+				? characterData.get("id")
+				: (characterData as Character).id;
+			const body = isFormData
+				? characterData
+				: JSON.stringify(characterData);
+
+			const init: RequestInit = {
 				method: "PUT",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(characterData),
-			});
+				body,
+			};
+
+			if (!isFormData) {
+				init.headers = { "Content-Type": "application/json" };
+			}
+
+			const res = await fetch(`/api/v1/characters/${id}`, init);
 
 			if (!res.ok) {
 				const errorData = await res.json().catch(() => ({}));

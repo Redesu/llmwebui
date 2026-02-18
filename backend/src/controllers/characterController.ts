@@ -2,6 +2,8 @@ import Character from "../models/Character.ts";
 import { Request, Response } from "express";
 import { CharacterAttributes } from "../types/CharacterAttributes.ts";
 import { AppError } from "../utils/AppError.ts";
+import path from "path";
+import fs from "fs";
 
 export const getCharacters = async (
 	req: Request<CharacterAttributes>,
@@ -33,10 +35,16 @@ export const createCharacter = async (
 	if (!name || typeof name !== "string" || !name.trim()) {
 		throw new AppError("Name is required", 400);
 	}
+
+		const baseUrl = `${req.protocol}://${req.get("host")}`;
+		const avatarPath = req.file
+			? `${baseUrl}/uploads/avatars/${req.file.filename}`
+			: avatarUrl || null;
+
 	const character = await Character.create({
 		name: name.trim(),
 		description: description?.trim() || null,
-		avatarUrl: avatarUrl?.trim() || null,
+		avatarUrl: avatarPath,
 		story: story?.trim() || null,
 	});
 	res.status(201).json({ character });
@@ -57,13 +65,31 @@ export const updateCharacter = async (
 		character.name = characterData.name.trim();
 	}
 
-	character.description = characterData?.description?.trim() ?? null
-	character.avatarUrl = characterData?.avatarUrl?.trim() ?? null
-	character.story = characterData?.story?.trim() ?? null
+	if (req.file) {
+		if (character.avatarUrl?.startsWith("/uploads/avatars/")) {
+			const oldPath = path.join(
+				__dirname,
+				"../",
+				character.avatarUrl,
+			);
 
-	await character.update(characterData);
+			if (fs.existsSync(oldPath)) {
+				fs.unlinkSync(oldPath);
+			}
+		}
+
+		const baseUrl = `${req.protocol}://${req.get("host")}`;
+		character.avatarUrl = `${baseUrl}/uploads/avatars/${req.file.filename}`;
+	} else if (characterData.avatarUrl !== undefined) {
+		character.avatarUrl = characterData.avatarUrl?.trim() || null;
+	}
+
+	character.description = characterData?.description?.trim() ?? null;
+	character.story = characterData?.story?.trim() ?? null;
+
+	await character.save();
 	res.json({ character });
-}
+};
 
 export const deleteCharacter = async (
 	req: Request,

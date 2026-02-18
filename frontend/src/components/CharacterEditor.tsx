@@ -4,7 +4,7 @@ import { Character } from "../types/character";
 import CharacterForm from "./CharacterForm";
 import { ChevronLeft } from "lucide-react";
 
-type UpdateCharacterFunc = (characterData: Character) => void;
+type UpdateCharacterFunc = (characterData: Character | FormData) => void;
 type DeleteCharacterFunc = (id: number) => void;
 
 export default function CharacterEditor({
@@ -24,6 +24,8 @@ export default function CharacterEditor({
 		avatarUrl: "",
 		story: "",
 	});
+
+	const [avatarFile, setAvatarFile] = useState<File | null>(null);
 
 	useEffect(() => {
 		if (selectedCharacter) {
@@ -47,12 +49,19 @@ export default function CharacterEditor({
 
 	const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
-		if (!selectedCharacter) return;
 
-		updateCharacter({
-			id: selectedCharacter.id,
-			...formData,
-		});
+		if (!selectedCharacter) return;
+		const data = new FormData();
+
+		data.append("id", selectedCharacter.id.toString());
+		data.append("name", formData.name.trim());
+		data.append("description", formData.description || "");
+		data.append("story", formData.story || "");
+
+		if (avatarFile) data.append("avatar", avatarFile);
+		if (formData.avatarUrl) data.append("avatarUrl", formData.avatarUrl);
+
+		updateCharacter(data);
 
 		setView(VIEW.CHAT);
 	};
@@ -67,6 +76,14 @@ export default function CharacterEditor({
 			deleteCharacter(selectedCharacter.id);
 			setView(VIEW.CHAT);
 		}
+	};
+
+	const handleAvatarChange = (file: File | null, url?: string) => {
+		setAvatarFile(file);
+		setFormData({
+			...formData,
+			avatarUrl: url || "",
+		});
 	};
 
 	if (!selectedCharacter) {
@@ -96,6 +113,7 @@ export default function CharacterEditor({
 				formData={formData}
 				onFormChange={handleChange}
 				isCreator={false}
+				onAvatarChange={handleAvatarChange}
 			/>
 
 			<div className="flex justify-between">

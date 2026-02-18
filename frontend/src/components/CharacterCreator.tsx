@@ -3,7 +3,9 @@ import { VIEW } from "../shared/view";
 import { Character } from "../types/character";
 import CharacterForm from "./CharacterForm";
 
-type CreateCharacterFunc = (characterData: Omit<Character, "id">) => void;
+type CreateCharacterFunc = (
+	characterData: Omit<Character, "id"> | FormData,
+) => void;
 
 export default function CharacterCreator({
 	createCharacter,
@@ -19,6 +21,8 @@ export default function CharacterCreator({
 		story: "",
 	});
 
+	const [avatarFile, setAvatarFile] = useState<File | null>(null);
+
 	const handleChange = (
 		e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
 	) => {
@@ -28,13 +32,31 @@ export default function CharacterCreator({
 		});
 	};
 
+	const handleAvatarChange = (file: File | null, url?: string) => {
+		setAvatarFile(file);
+		setFormData({
+			...formData,
+			avatarUrl: url || "",
+		});
+	};
+
 	const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
 		if (!formData.name.trim()) {
 			alert("Name is required.");
 			return;
 		}
-		createCharacter(formData);
+
+		const data = new FormData();
+
+		data.append("name", formData.name.trim());
+		data.append("description", formData.description || "");
+		data.append("story", formData.story || "");
+
+		if (avatarFile) data.append("avatar", avatarFile);
+		if (formData.avatarUrl) data.append("avatarUrl", formData.avatarUrl);
+
+		createCharacter(data);
 		setView(VIEW.CHAT);
 	};
 
@@ -48,6 +70,7 @@ export default function CharacterCreator({
 			<CharacterForm
 				formData={formData}
 				onFormChange={handleChange}
+				onAvatarChange={handleAvatarChange}
 				isCreator={true}
 			/>
 
