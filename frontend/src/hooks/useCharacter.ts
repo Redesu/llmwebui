@@ -3,13 +3,18 @@ import { Character } from "../types/character";
 
 export default function useCharacter() {
 	const [characters, setCharacters] = useState<Character[]>([]);
-	const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(
-		null,
-	);
+	const [selectedCharacter, setSelectedCharacter] =
+		useState<Character | null>(null);
 
 	const loadCharacters = async () => {
 		try {
 			const res = await fetch("/api/v1/characters");
+
+			if (!res.ok) {
+				const errorData = await res.json().catch(() => ({}));
+				throw new Error(errorData.error || `Server Error ${res.status}`);
+			}
+
 			const data = (await res.json()) as { characters: Character[] };
 			const fetchedCharacters = data.characters || [];
 
@@ -34,8 +39,6 @@ export default function useCharacter() {
 		}
 	};
 
-
-
 	useEffect(() => {
 		loadCharacters();
 	}, []);
@@ -48,17 +51,27 @@ export default function useCharacter() {
 	};
 
 	const createCharacter = async (
-		characterData: Omit<Character, "id">,
+		characterData: Omit<Character, "id"> | FormData,
 	) => {
 		try {
-			const res = await fetch("/api/v1/characters", {
+			const isFormData = characterData instanceof FormData;
+			const body = isFormData
+				? characterData
+				: JSON.stringify(characterData);
+
+			const init: RequestInit = {
 				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(characterData),
-			});
+				body,
+			};
+
+			if (!isFormData) {
+				init.headers = { "Content-Type": "application/json" };
+			}
+
+			const res = await fetch("/api/v1/characters", init);
 
 			if (!res.ok) {
-				const errorData = await res.json();
+				const errorData = await res.json().catch(() => ({}));
 				throw new Error(errorData.error || "Failed to create character");
 			}
 
@@ -67,22 +80,34 @@ export default function useCharacter() {
 
 			setCharacters((prev) => [...prev, newCharacter]);
 			setSelectedCharacter(newCharacter);
-
 		} catch (err) {
-			alert(`Error: ${err instanceof Error ? err.message : "Unknown error"}`);
+			alert(err instanceof Error ? err.message : "An unknown error occurred");
 		}
 	};
 
-	const updateCharacter = async (characterData: Character) => {
+	const updateCharacter = async (characterData: Character | FormData) => {
 		try {
-			const res = await fetch(`/api/v1/characters/${characterData.id}`, {
+			const isFormData = characterData instanceof FormData;
+			const id = isFormData
+				? characterData.get("id")
+				: (characterData as Character).id;
+			const body = isFormData
+				? characterData
+				: JSON.stringify(characterData);
+
+			const init: RequestInit = {
 				method: "PUT",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(characterData),
-			});
+				body,
+			};
+
+			if (!isFormData) {
+				init.headers = { "Content-Type": "application/json" };
+			}
+
+			const res = await fetch(`/api/v1/characters/${id}`, init);
 
 			if (!res.ok) {
-				const errorData = await res.json();
+				const errorData = await res.json().catch(() => ({}));
 				throw new Error(errorData.error || "Failed to update character");
 			}
 			const data = (await res.json()) as { character: Character };
@@ -97,7 +122,7 @@ export default function useCharacter() {
 				setSelectedCharacter(updatedCharacter);
 			}
 		} catch (err) {
-			alert(`Error: ${err instanceof Error ? err.message : "Unknown error"}`);
+			alert(err instanceof Error ? err.message : "An unknown error occurred");
 		}
 	};
 
@@ -106,7 +131,11 @@ export default function useCharacter() {
 			const res = await fetch(`/api/v1/characters/${id}`, {
 				method: "DELETE",
 			});
-			if (!res.ok) throw new Error("Failed to delete character");
+			
+			if (!res.ok) {
+				const errorData = await res.json().catch(() => ({}));
+				throw new Error(errorData.error || "Failed to delete character");
+			}
 
 			const updatedList = characters.filter((c) => c.id !== id);
 			setCharacters(updatedList);
@@ -115,7 +144,7 @@ export default function useCharacter() {
 				setSelectedCharacter(updatedList[0] || null);
 			}
 		} catch (err) {
-			console.error("Error deleting character:", err);
+			alert(err instanceof Error ? err.message : "An unknown error occurred");
 		}
 	};
 

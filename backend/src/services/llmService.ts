@@ -1,4 +1,5 @@
 import { CharacterAttributes, Params } from "../types/index";
+import { AppError } from "../utils/AppError.ts";
 
 interface MockResponse {
 	choices?: { message?: { content?: string } }[];
@@ -28,12 +29,7 @@ const sendMessage = async (
 
 	} catch (error) {
 		console.error("Mock LLM call failed:", error);
-		return new ReadableStream({
-			start(controller) {
-				controller.enqueue("Mock LLM Unavailable");
-				controller.close();
-			}
-		})
+		throw new AppError("LLM Service Unavailable", 503); 
 	}
 };
 

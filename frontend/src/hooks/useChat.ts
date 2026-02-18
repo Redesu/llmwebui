@@ -13,6 +13,10 @@ export default function useChat() {
 	const loadChats = async () => {
 		try {
 			const res = await fetch("/api/v1/chats");
+			if (!res.ok) {
+				const errorData = await res.json().catch(() => ({}));
+				throw new Error(errorData.error || "Failed to load chat history");
+			}
 			const data = await res.json();
 			const chats: Chat[] = data.chats || [];
 			setHistory(chats);
@@ -28,26 +32,36 @@ export default function useChat() {
 	};
 
 	const createChat = async () => {
-		const createRes = await fetch("/api/v1/chats", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ title: "New Chat..." }),
-		});
-		const createData = await createRes.json();
-		const newChat = createData.chat;
-		const newChatId = newChat.id;
+		try {
+			const createRes = await fetch("/api/v1/chats", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ title: "New Chat..." }),
+			});
+			if (!createRes.ok) {
+				const errorData = await createRes.json().catch(() => ({}));
+				throw new Error(errorData.error || "Could not create new chat");
+			}
+			const createData = await createRes.json();
+			const newChat = createData.chat;
+			const newChatId = newChat.id;
 
-		const finalTitle = `Chat #${newChatId}`;
-		await fetch(`/api/v1/chats/${newChatId}`, {
-			method: "PUT",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ title: finalTitle }),
-		});
 
-		setChatId(newChatId);
-		await loadChats();
-		setMessages([]);
-		return newChatId;
+			const finalTitle = `Chat #${newChatId}`;
+			await fetch(`/api/v1/chats/${newChatId}`, {
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ title: finalTitle }),
+			});
+
+			setChatId(newChatId);
+			await loadChats();
+			setMessages([]);
+			return newChatId;
+		} catch (err) {
+			alert(err instanceof Error ? err.message : "Error creating chat");
+			return null;
+		}
 	};
 
 	const deleteChat = async (id: number) => {
@@ -57,7 +71,11 @@ export default function useChat() {
 			const isDeletingCurrent = id === chatId;
 			const currentIndex = history.findIndex((c) => c.id === id);
 
-			await fetch(`/api/v1/chats/${id}`, { method: "DELETE" });
+			const res = await fetch(`/api/v1/chats/${id}`, { method: "DELETE" });
+			if (!res.ok) {
+				const errorData = await res.json().catch(() => ({}));
+				throw new Error(errorData.error || "Failed to delete chat");
+			}
 
 			const updatedHistory = history.filter((c) => c.id !== id);
 			setHistory(updatedHistory);
@@ -73,7 +91,7 @@ export default function useChat() {
 			setChatId(nextChatId);
 			await loadMessages(nextChatId);
 		} catch (err) {
-			console.error("Failed to delete chat:", err);
+			alert(err instanceof Error ? err.message : "Delete failed");
 		}
 	};
 
@@ -84,11 +102,16 @@ export default function useChat() {
 		}
 		try {
 			const res = await fetch(`/api/v1/chats/${id}/messages`);
+			if (!res.ok) {
+				const errorData = await res.json().catch(() => ({}));
+				throw new Error(errorData.error || "Failed to load messages");
+			}
 			const data = await res.json();
 			setMessages(data.messages || []);
 			setChatId(id);
 		} catch (err) {
-			console.error(err);
+			console.error("Load messages error:", err);
+			setMessages([]);
 		}
 	};
 
@@ -98,7 +121,7 @@ export default function useChat() {
 		character: Character,
 	) => {
 		const currentChatId = chatId ?? (await createChat());
-		if (!chatId) await loadMessages(currentChatId);
+		if (!currentChatId) return;
 
 		const userMessage: Message = {
 			id: crypto.randomUUID(),
@@ -108,28 +131,41 @@ export default function useChat() {
 		};
 		setMessages((prev) => [...prev, userMessage]);
 
-		const res = await fetch(`/api/v1/chats/${currentChatId}/messages`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ text, params, character }),
-		});
+		try {
+			const res = await fetch(`/api/v1/chats/${currentChatId}/messages`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ text, params, character }),
+			});
 
-		if (!res.body) return;
-		const reader = res.body.getReader();
+			if (!res.ok) {
+				const errorData = await res.json().catch(() => ({}));
+				throw new Error(errorData.error || `Server Error: ${res.statusText}`);
+			}
 
-		const assistantMessage: Message = {
-			id: crypto.randomUUID(),
-			role: Role.Assistant,
-			text: "",
-			character,
-		};
-		setMessages((prev) => [...prev, assistantMessage]);
-		await processStream(
-			reader,
-			assistantMessage.id as string,
-			setMessages,
-			loadChats,
-		);
+			if (!res.body) throw new Error("No response body");
+			const reader = res.body.getReader();
+
+			const assistantMessage: Message = {
+				id: crypto.randomUUID(),
+				role: Role.Assistant,
+				text: "",
+				character,
+			};
+			setMessages((prev) => [...prev, assistantMessage]);
+			await processStream(
+				reader,
+				assistantMessage.id as string,
+				setMessages,
+				loadChats,
+			);
+		} catch (err) {
+			alert(err instanceof Error ? err.message : "Message failed to send");
+			
+			setMessages((prev) => 
+				prev.filter((m) => m.id !== userMessage.id)
+			);
+		}
 	};
 
 	const editMessage = async (
@@ -244,11 +280,10 @@ const processStream = async (
 		const lines = buffer.split("\n");
 		buffer = lines.pop() || "";
 
-		for (const line of lines) {
-			if (!line.startsWith("data: ")) continue;
-
-			const jsonStr = line.substring(5).trim();
-			if (jsonStr === "[DONE]") continue;
+				for (const line of lines) {
+					if (!line.startsWith("data: ")) continue;
+					const jsonStr = line.substring(6).trim();
+					if (jsonStr === "[DONE]") continue;
 
 			try {
 				const parsed = JSON.parse(jsonStr);

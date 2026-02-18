@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Settings } from "../hooks/useSettings";
 import { VIEW } from "../shared/view";
 import { Character } from "../types/character";
+import { ChevronLeft, PenSquareIcon, PlusIcon } from "lucide-react";
 
 interface SettingsPanelProps {
 	params: Settings;
@@ -94,25 +95,27 @@ export default function SettingsPanel({
 			<div className="space-y-4">
 				<button
 					onClick={() => setView(VIEW.CHARACTER_CREATOR)}
-					className="w-full"
+					className="w-full flex items-center justify-center gap-1"
 				>
-					+ New Character
+					<PlusIcon />
+					New Character
 				</button>
 
 				{view === "chat" ? (
 					<button
 						onClick={() => setView(VIEW.CHARACTER_EDITOR)}
-						className="w-full"
+						className="w-full flex items-center justify-center gap-1"
 						disabled={!selectedCharacter}
 					>
+						<PenSquareIcon />
 						Edit Character
 					</button>
 				) : (
 					<button
 						onClick={() => setView(VIEW.CHAT)}
-						className="w-full"
+						className="w-full flex items-center justify-center gap-1"
 					>
-						← Back to Chat
+						<ChevronLeft /> Back to Chat
 					</button>
 				)}
 			</div>
